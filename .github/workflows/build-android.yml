@@ -37,6 +37,19 @@ jobs:
           mkdir -p assets/product_images
           touch assets/product_images/.keep
 
+      - name: Apply Android CI source corrections
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('lib/services/product_lookup_service.dart')
+          s = p.read_text()
+          s = s.replace("if (gtin != null) return _lookupTrustedMaster(gtin);", "if (gtin != null) return await _lookupTrustedMaster(gtin);")
+          s = s.replace("|\\\\$)',\n        caseSensitive: false,", "|\\$)',\n        caseSensitive: false,")
+          s = s.replace("        return _request(\n          nextMethod,", "        return await _request(\n          nextMethod,")
+          p.write_text(s)
+          PY
+
       - name: Create Android host
         run: flutter create . --platforms=android --org com.profitgps --project-name profitgps_billing_app
 
