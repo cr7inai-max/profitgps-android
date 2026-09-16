@@ -22,6 +22,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Restore stable Android test signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: profitgps-android-stable-test-signing-v1
+
+      - name: Ensure stable Android test signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=ProfitGPS Android Test,O=ProfitGPS,C=IN"
+          fi
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -43,7 +66,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Existing Upgrade 21 source corrections.
           p = Path('lib/services/product_lookup_service.dart')
           s = p.read_text()
           s = s.replace("if (gtin != null) return _lookupTrustedMaster(gtin);", "if (gtin != null) return await _lookupTrustedMaster(gtin);")
@@ -51,22 +73,15 @@ jobs:
           s = s.replace("        return _request(\n          nextMethod,", "        return await _request(\n          nextMethod,")
           p.write_text(s)
 
-          # Upgrade the Android scanner to the current stable line. Recent
-          # releases include Android CameraX initialization and lifecycle fixes.
           p = Path('pubspec.yaml')
           s = p.read_text()
           s = s.replace('mobile_scanner: ^6.0.11', 'mobile_scanner: ^7.4.2')
           p.write_text(s)
 
-          # mobile_scanner 7.3+ uses a two-argument errorBuilder.
           p = Path('lib/widgets/barcode_input_dialog.dart')
           s = p.read_text()
           s = s.replace('errorBuilder: (context, error, child) => Center(', 'errorBuilder: (context, error) => Center(')
-
-          # Avoid starting CameraX before the native preview is attached.
           s = s.replace('''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: true,\n  );\n  bool returning = false;''', '''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: false,\n  );\n  bool returning = false;\n  String? cameraStartError;\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      if (!mounted) return;\n      try {\n        await scannerController.start();\n      } catch (error) {\n        if (mounted) {\n          setState(() => cameraStartError = error.toString());\n        }\n      }\n    });\n  }''')
-
-          # Show a useful retry control if a vendor camera service fails once.
           marker = '''      body: Stack(\n        fit: StackFit.expand,\n        children: ['''
           replacement = '''      body: Stack(\n        fit: StackFit.expand,\n        children: [\n          if (cameraStartError != null)\n            Center(\n              child: Padding(\n                padding: const EdgeInsets.all(24),\n                child: Column(\n                  mainAxisSize: MainAxisSize.min,\n                  children: [\n                    Text(\n                      'Camera scanner could not start.\\n$cameraStartError',\n                      textAlign: TextAlign.center,\n                      style: const TextStyle(color: Colors.white),\n                    ),\n                    const SizedBox(height: 16),\n                    FilledButton.icon(\n                      onPressed: () async {\n                        setState(() => cameraStartError = null);\n                        try {\n                          await scannerController.stop();\n                        } catch (_) {}\n                        await Future<void>.delayed(const Duration(milliseconds: 250));\n                        try {\n                          await scannerController.start();\n                        } catch (error) {\n                          if (mounted) setState(() => cameraStartError = error.toString());\n                        }\n                      },\n                      icon: const Icon(Icons.refresh_rounded),\n                      label: const Text('Retry camera'),\n                    ),\n                  ],\n                ),\n              ),\n            ),'''
           s = s.replace(marker, replacement)
@@ -75,6 +90,24 @@ jobs:
 
       - name: Create Android host
         run: flutter create . --platforms=android --org com.profitgps --project-name profitgps_billing_app
+
+      - name: Set stable Android package identity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle = Path('android/app/build.gradle.kts')
+          s = gradle.read_text()
+          import re
+          s = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.profitgps.android"', s)
+          gradle.write_text(s)
+
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          s = re.sub(r'android:label="[^"]+"', 'android:label="ProfitGPS"', s, count=1)
+          manifest.write_text(s)
+          PY
 
       - name: Ensure Android permissions
         shell: bash
@@ -119,24 +152,21 @@ jobs:
                   s = s.replace(old, new)
               if s != original:
                   p.write_text(s)
-                  print(f'Updated {p} to compileSdk 36')
-              else:
-                  print(f'No compileSdk 34 literal found in {p}; leaving unchanged')
           PY
 
       - name: Analyze
         run: flutter analyze lib
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.21.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Upgrade21_Native_CameraFix.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Upgrade21_InstallFix.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Upgrade21-Native-CameraFix
-          path: ProfitGPS_Android_Upgrade21_Native_CameraFix.apk
+          name: ProfitGPS-Android-Upgrade21-InstallFix
+          path: ProfitGPS_Android_Upgrade21_InstallFix.apk
           if-no-files-found: error
           retention-days: 30
