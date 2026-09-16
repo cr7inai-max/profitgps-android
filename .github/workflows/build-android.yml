@@ -69,6 +69,37 @@ jobs:
       - name: Get packages
         run: flutter pub get
 
+      - name: Android compile SDK compatibility
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          root = Path.home() / '.pub-cache' / 'hosted' / 'pub.dev'
+          files = []
+          for folder in root.glob('file_picker-*'):
+              files.extend(folder.glob('android/build.gradle'))
+              files.extend(folder.glob('android/build.gradle.kts'))
+          if not files:
+              raise SystemExit('file_picker Android Gradle file not found')
+          for p in files:
+              s = p.read_text()
+              original = s
+              replacements = {
+                  'compileSdk 34': 'compileSdk 36',
+                  'compileSdkVersion 34': 'compileSdkVersion 36',
+                  'compileSdk = 34': 'compileSdk = 36',
+                  'compileSdkVersion = 34': 'compileSdkVersion = 36',
+              }
+              for old, new in replacements.items():
+                  s = s.replace(old, new)
+              if s != original:
+                  p.write_text(s)
+                  print(f'Updated {p} to compileSdk 36')
+              else:
+                  print(f'No compileSdk 34 literal found in {p}; leaving unchanged')
+          PY
+
       - name: Analyze
         run: flutter analyze lib
 
