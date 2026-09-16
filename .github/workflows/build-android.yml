@@ -28,14 +28,14 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Reconstruct ProfitGPS source
+      - name: Extract ProfitGPS source
         shell: bash
         run: |
           set -euo pipefail
-          cat source_chunks/*.part > profitgps_source.b64
-          base64 -d profitgps_source.b64 > profitgps_source.tar.xz
-          tar -xJf profitgps_source.tar.xz
-          rm -f profitgps_source.b64 profitgps_source.tar.xz
+          test -f ProfitGPS_Android_Upgrade21_Native_Source.zip
+          unzip -o ProfitGPS_Android_Upgrade21_Native_Source.zip
+          mkdir -p assets/product_images
+          touch assets/product_images/.keep
 
       - name: Create Android host
         run: flutter create . --platforms=android --org com.profitgps --project-name profitgps_billing_app
