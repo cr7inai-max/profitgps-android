@@ -1,0 +1,1 @@
+Trigger v0.11 install-fix build with unique Android package identity com.profitgps.mobilev011.
