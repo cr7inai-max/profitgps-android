@@ -51,7 +51,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Extract ProfitGPS source
+      - name: Extract ProfitGPS Upgrade 21 source
         shell: bash
         run: |
           set -euo pipefail
@@ -60,7 +60,10 @@ jobs:
           mkdir -p assets/product_images
           touch assets/product_images/.keep
 
-      - name: Apply Android CI source corrections
+      - name: Apply new mobile baseline
+        run: python3 mobile_overlay/apply_mobile_baseline.py
+
+      - name: Apply Android scanner and source corrections
         shell: bash
         run: |
           python3 - <<'PY'
@@ -81,9 +84,9 @@ jobs:
           p = Path('lib/widgets/barcode_input_dialog.dart')
           s = p.read_text()
           s = s.replace('errorBuilder: (context, error, child) => Center(', 'errorBuilder: (context, error) => Center(')
-          s = s.replace('''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: true,\n  );\n  bool returning = false;''', '''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: false,\n  );\n  bool returning = false;\n  String? cameraStartError;\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      if (!mounted) return;\n      try {\n        await scannerController.start();\n      } catch (error) {\n        if (mounted) {\n          setState(() => cameraStartError = error.toString());\n        }\n      }\n    });\n  }''')
+          s = s.replace('''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: true,\n  );\n  bool returning = false;''', '''  final MobileScannerController scannerController = MobileScannerController(\n    detectionSpeed: DetectionSpeed.noDuplicates,\n    autoStart: false,\n  );\n  bool returning = false;\n  String? cameraStartError;\n\n  @override\n  void initState() {\n    super.initState();\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      if (!mounted) return;\n      try {\n        await scannerController.start();\n      } catch (error) {\n        if (mounted) setState(() => cameraStartError = error.toString());\n      }\n    });\n  }''')
           marker = '''      body: Stack(\n        fit: StackFit.expand,\n        children: ['''
-          replacement = '''      body: Stack(\n        fit: StackFit.expand,\n        children: [\n          if (cameraStartError != null)\n            Center(\n              child: Padding(\n                padding: const EdgeInsets.all(24),\n                child: Column(\n                  mainAxisSize: MainAxisSize.min,\n                  children: [\n                    Text(\n                      'Camera scanner could not start.\\n$cameraStartError',\n                      textAlign: TextAlign.center,\n                      style: const TextStyle(color: Colors.white),\n                    ),\n                    const SizedBox(height: 16),\n                    FilledButton.icon(\n                      onPressed: () async {\n                        setState(() => cameraStartError = null);\n                        try {\n                          await scannerController.stop();\n                        } catch (_) {}\n                        await Future<void>.delayed(const Duration(milliseconds: 250));\n                        try {\n                          await scannerController.start();\n                        } catch (error) {\n                          if (mounted) setState(() => cameraStartError = error.toString());\n                        }\n                      },\n                      icon: const Icon(Icons.refresh_rounded),\n                      label: const Text('Retry camera'),\n                    ),\n                  ],\n                ),\n              ),\n            ),'''
+          replacement = '''      body: Stack(\n        fit: StackFit.expand,\n        children: [\n          if (cameraStartError != null)\n            Center(\n              child: Padding(\n                padding: const EdgeInsets.all(24),\n                child: Column(\n                  mainAxisSize: MainAxisSize.min,\n                  children: [\n                    Text('Camera scanner could not start.\\n$cameraStartError', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),\n                    const SizedBox(height: 16),\n                    FilledButton.icon(\n                      onPressed: () async {\n                        setState(() => cameraStartError = null);\n                        try { await scannerController.stop(); } catch (_) {}\n                        await Future<void>.delayed(const Duration(milliseconds: 250));\n                        try { await scannerController.start(); } catch (error) { if (mounted) setState(() => cameraStartError = error.toString()); }\n                      },\n                      icon: const Icon(Icons.refresh_rounded),\n                      label: const Text('Retry camera'),\n                    ),\n                  ],\n                ),\n              ),\n            ),'''
           s = s.replace(marker, replacement)
           p.write_text(s)
           PY
@@ -96,13 +99,11 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
+          import re
           gradle = Path('android/app/build.gradle.kts')
           s = gradle.read_text()
-          import re
           s = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.profitgps.android"', s)
           gradle.write_text(s)
-
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           s = manifest.read_text()
           s = re.sub(r'android:label="[^"]+"', 'android:label="ProfitGPS"', s, count=1)
@@ -114,13 +115,13 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('android/app/src/main/AndroidManifest.xml')
-          s=p.read_text()
-          perms='''    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n'''
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          perms = '''    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n'''
           if 'android.permission.CAMERA' not in s:
-              s=s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'+perms)
+              s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + perms)
           elif 'android.hardware.camera' not in s:
-              s=s.replace('<uses-permission android:name="android.permission.INTERNET" />', '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />')
+              s = s.replace('<uses-permission android:name="android.permission.INTERNET" />', '<uses-permission android:name="android.permission.INTERNET" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />')
           p.write_text(s)
           PY
 
@@ -137,36 +138,31 @@ jobs:
           for folder in root.glob('file_picker-*'):
               files.extend(folder.glob('android/build.gradle'))
               files.extend(folder.glob('android/build.gradle.kts'))
-          if not files:
-              raise SystemExit('file_picker Android Gradle file not found')
           for p in files:
               s = p.read_text()
-              original = s
-              replacements = {
+              for old, new in {
                   'compileSdk 34': 'compileSdk 36',
                   'compileSdkVersion 34': 'compileSdkVersion 36',
                   'compileSdk = 34': 'compileSdk = 36',
                   'compileSdkVersion = 34': 'compileSdkVersion = 36',
-              }
-              for old, new in replacements.items():
+              }.items():
                   s = s.replace(old, new)
-              if s != original:
-                  p.write_text(s)
+              p.write_text(s)
           PY
 
       - name: Analyze
         run: flutter analyze lib
 
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.21.${{ github.run_number }}
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.10.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Upgrade21_InstallFix.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_Baseline_v0.10.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Upgrade21-InstallFix
-          path: ProfitGPS_Android_Upgrade21_InstallFix.apk
+          name: ProfitGPS-Android-Mobile-Baseline-v0.10
+          path: ProfitGPS_Android_Mobile_Baseline_v0.10.apk
           if-no-files-found: error
           retention-days: 30
