@@ -108,7 +108,7 @@ jobs:
       - name: Create Android host
         run: flutter create . --platforms=android --org com.profitgps --project-name profitgps_billing_app
 
-      - name: Set stable Android package identity
+      - name: Set install-fix Android package identity
         shell: bash
         run: |
           python3 - <<'PY'
@@ -116,7 +116,7 @@ jobs:
           import re
           gradle = Path('android/app/build.gradle.kts')
           s = gradle.read_text()
-          s = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.profitgps.android"', s)
+          s = re.sub(r'applicationId\s*=\s*"[^"]+"', 'applicationId = "com.profitgps.mobilev011"', s)
           gradle.write_text(s)
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           s = manifest.read_text()
@@ -171,12 +171,12 @@ jobs:
         run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.11.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_v0.11_Screenshot_Parity.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_v0.11_InstallFix.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Mobile-v0.11-Screenshot-Parity
-          path: ProfitGPS_Android_Mobile_v0.11_Screenshot_Parity.apk
+          name: ProfitGPS-Android-Mobile-v0.11-InstallFix
+          path: ProfitGPS_Android_Mobile_v0.11_InstallFix.apk
           if-no-files-found: error
           retention-days: 30
