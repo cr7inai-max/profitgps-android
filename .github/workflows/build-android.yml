@@ -60,8 +60,25 @@ jobs:
           mkdir -p assets/product_images
           touch assets/product_images/.keep
 
-      - name: Apply new mobile baseline
+      - name: Apply mobile baseline
         run: python3 mobile_overlay/apply_mobile_baseline.py
+
+      - name: Apply screenshot-first v0.11 parity pass
+        shell: bash
+        run: |
+          python3 mobile_overlay/apply_v011.py
+          python3 - <<'PY'
+          from pathlib import Path
+          # The v0.11 neutral-color migration replaces Color(...) tokens in
+          # existing source. Normalize any legacy `const AppTheme.*` result so
+          # Dart sees the static const value directly.
+          for p in Path('lib').rglob('*.dart'):
+              s = p.read_text()
+              s = s.replace('const AppTheme.surface2', 'AppTheme.surface2')
+              s = s.replace('const AppTheme.surface', 'AppTheme.surface')
+              s = s.replace('const AppTheme.border', 'AppTheme.border')
+              p.write_text(s)
+          PY
 
       - name: Apply Android scanner and source corrections
         shell: bash
@@ -154,15 +171,15 @@ jobs:
         run: flutter analyze lib
 
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.10.${{ github.run_number }}
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.11.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_Baseline_v0.10.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_v0.11_Screenshot_Parity.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Mobile-Baseline-v0.10
-          path: ProfitGPS_Android_Mobile_Baseline_v0.10.apk
+          name: ProfitGPS-Android-Mobile-v0.11-Screenshot-Parity
+          path: ProfitGPS_Android_Mobile_v0.11_Screenshot_Parity.apk
           if-no-files-found: error
           retention-days: 30
