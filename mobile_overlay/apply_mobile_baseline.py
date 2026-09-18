@@ -9,6 +9,16 @@ for src in overlay.rglob('*.dart'):
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
 
+# The compact overlay widgets use four closing parentheses after their
+# children list (Row/Column -> Container -> InkWell -> Material).
+for filename in [
+    'lib/screens/mobile_home_screen.dart',
+    'lib/screens/product_onboarding_screen.dart',
+]:
+    p = Path(filename)
+    s = p.read_text().replace('])))));', ']))));')
+    p.write_text(s)
+
 p = Path('lib/widgets/common.dart')
 s = p.read_text()
 s = s.replace('this.accent = AppTheme.red,', 'this.accent = AppTheme.primary,')
