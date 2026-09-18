@@ -52,7 +52,6 @@ if old_sku in s:
     s = s.replace(old_sku, "decoration: InputDecoration(labelText: 'Internal SKU / code', suffixIcon: IconButton(tooltip: 'Generate internal SKU', onPressed: () => update(() => sku.text = _newInternalSku()), icon: const Icon(Icons.auto_awesome_rounded))),", 1)
 p.write_text(s)
 
-# Add PO/order import alongside invoice/catalogue/migration onboarding.
 p = Path('lib/screens/product_onboarding_screen.dart')
 s = p.read_text()
 po_anchor = "_Method(icon: Icons.description_outlined, title: 'Purchase Invoice', subtitle: 'Stage invoice; verify before stock posting', onTap: () => _stageFile('Purchase Invoice Import', ['pdf', 'csv', 'xlsx', 'xls'])),"
@@ -60,7 +59,6 @@ if po_anchor in s and "Purchase Order / PO" not in s:
     s = s.replace(po_anchor, po_anchor + "\n                  _Method(icon: Icons.assignment_outlined, title: 'Purchase Order / PO', subtitle: 'Stage supplier order for matching and review', onTap: () => _stageFile('Purchase Order / PO Import', ['pdf', 'csv', 'xlsx', 'xls'])),")
 p.write_text(s)
 
-# Integrate mobile-specific screens without changing the Windows-width layout.
 p = Path('lib/screens/app_shell.dart')
 s = p.read_text()
 if "import 'mobile_billing_screen.dart';" not in s:
@@ -88,6 +86,11 @@ new_mobile_child = """    final mobileChild = items[index].$1 == 'Command Center
 if old_mobile_child in s:
     s = s.replace(old_mobile_child, new_mobile_child, 1)
 s = s.replace("? _screenBody(mobileChild, light: items[index].$1 == 'Command Center')", "? _screenBody(mobileChild, light: true)")
+p.write_text(s)
+
+# Compatibility patch for Customer model field name.
+p = Path('lib/screens/mobile_billing_screen.dart')
+s = p.read_text().replace('customer!.mobile', 'customer!.phone').replace('c.mobile', 'c.phone')
 p.write_text(s)
 
 for filename in ['lib/screens/dashboard_screen.dart', 'lib/screens/login_screen.dart', 'lib/screens/reports_screen.dart']:
