@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import re
 
 root = Path('.')
 overlay = root / 'mobile_overlay' / 'lib'
@@ -9,8 +10,6 @@ for src in overlay.rglob('*.dart'):
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
 
-# The compact overlay widgets use four closing parentheses after their
-# children list (Row/Column -> Container -> InkWell -> Material).
 for filename in [
     'lib/screens/mobile_home_screen.dart',
     'lib/screens/product_onboarding_screen.dart',
@@ -53,6 +52,44 @@ if old_sku in s:
     s = s.replace(old_sku, "decoration: InputDecoration(labelText: 'Internal SKU / code', suffixIcon: IconButton(tooltip: 'Generate internal SKU', onPressed: () => update(() => sku.text = _newInternalSku()), icon: const Icon(Icons.auto_awesome_rounded))),", 1)
 p.write_text(s)
 
+# Add PO/order import alongside invoice/catalogue/migration onboarding.
+p = Path('lib/screens/product_onboarding_screen.dart')
+s = p.read_text()
+po_anchor = "_Method(icon: Icons.description_outlined, title: 'Purchase Invoice', subtitle: 'Stage invoice; verify before stock posting', onTap: () => _stageFile('Purchase Invoice Import', ['pdf', 'csv', 'xlsx', 'xls'])),"
+if po_anchor in s and "Purchase Order / PO" not in s:
+    s = s.replace(po_anchor, po_anchor + "\n                  _Method(icon: Icons.assignment_outlined, title: 'Purchase Order / PO', subtitle: 'Stage supplier order for matching and review', onTap: () => _stageFile('Purchase Order / PO Import', ['pdf', 'csv', 'xlsx', 'xls'])),")
+p.write_text(s)
+
+# Integrate mobile-specific screens without changing the Windows-width layout.
+p = Path('lib/screens/app_shell.dart')
+s = p.read_text()
+if "import 'mobile_billing_screen.dart';" not in s:
+    s = s.replace("import 'mobile_home_screen.dart';", "import 'mobile_home_screen.dart';\nimport 'mobile_billing_screen.dart';\nimport 'corrections_screen.dart';\nimport 'backup_import_screen.dart';")
+if "('Corrections'," not in s:
+    s = s.replace("      ('Feedback', Icons.forum_rounded, const FeedbackScreen()),", "      ('Feedback', Icons.forum_rounded, const FeedbackScreen()),\n      if (owner) ('Corrections', Icons.edit_note_rounded, const CorrectionsScreen()),\n      if (owner) ('Backup & Import', Icons.cloud_sync_outlined, const BackupImportScreen()),")
+old_mobile_child = """    final mobileChild = items[index].$1 == 'Command Center'
+        ? MobileHomeScreen(
+            onBilling: () => setState(() => index = findItem('Billing')),
+            onPurchase: () => setState(() => index = findItem('Purchases')),
+            onProducts: () => setState(() => index = findItem('Products')),
+            onRecords: () => setState(() => index = findItem('Records')),
+          )
+        : items[index].$3;"""
+new_mobile_child = """    final mobileChild = items[index].$1 == 'Command Center'
+        ? MobileHomeScreen(
+            onBilling: () => setState(() => index = findItem('Billing')),
+            onPurchase: () => setState(() => index = findItem('Purchases')),
+            onProducts: () => setState(() => index = findItem('Products')),
+            onRecords: () => setState(() => index = findItem('Records')),
+          )
+        : items[index].$1 == 'Billing'
+            ? const MobileBillingScreen()
+            : items[index].$3;"""
+if old_mobile_child in s:
+    s = s.replace(old_mobile_child, new_mobile_child, 1)
+s = s.replace("? _screenBody(mobileChild, light: items[index].$1 == 'Command Center')", "? _screenBody(mobileChild, light: true)")
+p.write_text(s)
+
 for filename in ['lib/screens/dashboard_screen.dart', 'lib/screens/login_screen.dart', 'lib/screens/reports_screen.dart']:
     p = Path(filename)
     s = p.read_text().replace('AppTheme.red', 'AppTheme.primary')
@@ -62,6 +99,5 @@ for filename in ['lib/screens/dashboard_screen.dart', 'lib/screens/login_screen.
 
 p = Path('pubspec.yaml')
 s = p.read_text()
-import re
-s = re.sub(r'^version:\s*[^\n]+', 'version: 0.10.0+10', s, flags=re.M)
+s = re.sub(r'^version:\s*[^\n]+', 'version: 0.11.0+11', s, flags=re.M)
 p.write_text(s)
