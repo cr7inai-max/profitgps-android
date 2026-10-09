@@ -186,15 +186,15 @@ jobs:
         run: flutter analyze lib --no-fatal-warnings
 
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.12.${{ github.run_number }}
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.13.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Integrated_v0.12.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Integrated_v0.13.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Integrated-v0.12
-          path: ProfitGPS_Android_Integrated_v0.12.apk
+          name: ProfitGPS-Android-Integrated-v0.13
+          path: ProfitGPS_Android_Integrated_v0.13.apk
           if-no-files-found: error
           retention-days: 30
