@@ -1,0 +1,17 @@
+import 'package:flutter/material.dart';
+import '../core/app_scope.dart';
+import '../core/theme.dart';
+import 'app_shell.dart';
+
+class LoginScreen extends StatefulWidget { const LoginScreen({super.key}); @override State<LoginScreen> createState()=>_LoginScreenState(); }
+class _LoginScreenState extends State<LoginScreen>{
+  final id=TextEditingController(text:'owner'); final pin=TextEditingController(text:'1234'); String role='Owner'; bool obscure=true;
+  @override Widget build(BuildContext context)=>Scaffold(body:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(22),child:Container(width:460,padding:const EdgeInsets.all(24),decoration:BoxDecoration(color:AppTheme.surface,borderRadius:BorderRadius.circular(24),border:Border.all(color:AppTheme.border),boxShadow:const [BoxShadow(color:Color(0x44000000),blurRadius:30,offset:Offset(0,16))]),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Row(children:[Container(width:46,height:46,decoration:BoxDecoration(color:const Color(0xFF351318),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.trending_up_rounded,color:AppTheme.red)),const SizedBox(width:12),const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('PROFIT GPS',style:TextStyle(fontSize:22,fontWeight:FontWeight.w900)),Text('Secure store access',style:TextStyle(color:AppTheme.muted,fontSize:11))])]),
+    const SizedBox(height:24),const Text('Sign in',style:TextStyle(fontSize:26,fontWeight:FontWeight.w900)),const SizedBox(height:6),const Text('Owner and worker views keep sensitive profit and purchase-cost information controlled.',style:TextStyle(color:AppTheme.muted,height:1.4)),const SizedBox(height:18),
+    SegmentedButton<String>(segments:const [ButtonSegment(value:'Owner',icon:Icon(Icons.admin_panel_settings_outlined),label:Text('Owner')),ButtonSegment(value:'Worker',icon:Icon(Icons.point_of_sale_rounded),label:Text('Worker'))],selected:{role},onSelectionChanged:(v)=>setState((){role=v.first;if(role=='Owner'){id.text='owner';pin.text='1234';}else{id.text='worker';pin.text='1111';}})),const SizedBox(height:14),
+    TextField(controller:id,decoration:const InputDecoration(labelText:'Login ID',prefixIcon:Icon(Icons.person_outline))),const SizedBox(height:10),TextField(controller:pin,obscureText:obscure,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'PIN',prefixIcon:const Icon(Icons.lock_outline),suffixIcon:IconButton(onPressed:()=>setState(()=>obscure=!obscure),icon:Icon(obscure?Icons.visibility_outlined:Icons.visibility_off_outlined)))),const SizedBox(height:16),
+    SizedBox(width:double.infinity,height:48,child:FilledButton.icon(onPressed:_login,icon:const Icon(Icons.login_rounded),label:Text('Continue as $role'))),const SizedBox(height:12),Text(role=='Owner'?'Owner access: owner / 1234':'Worker access: worker / 1111',style:const TextStyle(color:AppTheme.muted,fontSize:11)),
+  ])))));
+  Future<void> _login() async {final ok=(role=='Owner'&&id.text.trim().toLowerCase()=='owner'&&pin.text=='1234')||(role=='Worker'&&id.text.trim().toLowerCase()=='worker'&&pin.text=='1111');if(!ok){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Invalid login ID or PIN.')));return;}final app=AppScope.of(context);app.data!.business.activeRole=role;if(role=='Worker')app.data!.business.showProfitInBilling=false;await app.persist();if(!mounted)return;Navigator.of(context).pushReplacement(MaterialPageRoute(builder:(_)=>const AppShell()));}
+}

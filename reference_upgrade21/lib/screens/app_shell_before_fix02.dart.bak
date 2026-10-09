@@ -1,0 +1,378 @@
+import 'package:flutter/material.dart';
+import '../core/theme.dart';
+import '../core/app_scope.dart';
+import 'analytics_screen.dart';
+import 'billing_screen.dart';
+import 'branches_screen.dart';
+import 'dashboard_screen.dart';
+import 'employees_screen.dart';
+import 'feedback_screen.dart';
+import 'customers_screen.dart';
+import 'records_screen.dart';
+import 'products_screen.dart';
+import 'reports_screen.dart';
+import 'settings_screen.dart';
+import 'smart_tools_screen.dart';
+import 'suppliers_screen.dart';
+import 'cash_close_screen.dart';
+
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  int index = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final role = AppScope.of(context).data?.business.activeRole ?? 'Owner';
+    final owner = role == 'Owner';
+    final items = <(String, IconData, Widget)>[
+      if (owner) ('Command Center', Icons.space_dashboard_rounded, const DashboardScreen()),
+      ('Billing', Icons.point_of_sale_rounded, BillingScreen(onExit: () => setState(() => index = 0))),
+      ('Products', Icons.inventory_2_rounded, const ProductsScreen()),
+      if (owner) ('Suppliers', Icons.local_shipping_rounded, const SuppliersScreen()),
+      if (owner) ('Analytics', Icons.query_stats_rounded, const AnalyticsScreen()),
+      if (owner) ('Profit GPS', Icons.navigation_rounded, const SmartToolsScreen()),
+      ('Cash Close', Icons.account_balance_wallet_rounded, const CashCloseScreen()),
+      if (owner) ('Branches', Icons.store_mall_directory_rounded, const BranchesScreen()),
+      if (owner) ('Employees', Icons.groups_2_rounded, const EmployeesScreen()),
+      ('Customers', Icons.badge_rounded, const CustomersScreen()),
+      ('Records', Icons.receipt_long_rounded, const RecordsScreen()),
+      ('Feedback', Icons.forum_rounded, const FeedbackScreen()),
+      if (owner) ('Reports', Icons.description_rounded, const ReportsScreen()),
+      if (owner) ('Settings', Icons.settings_rounded, const SettingsScreen()),
+    ];
+    if (index >= items.length) index = 0;
+    final width = MediaQuery.sizeOf(context).width;
+    final mobile = width < 760;
+    final extendedSidebar = width >= 1240;
+
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: mobile
+          ? AppBar(
+              titleSpacing: 4,
+              title: const _BrandMark(compact: true),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 10),
+                  child: _LiveBadge(),
+                ),
+              ],
+            )
+          : null,
+      drawer: mobile
+          ? Drawer(
+              width: 286,
+              backgroundColor: AppTheme.sidebar,
+              child: SafeArea(
+                child: _SideMenu(
+                  selected: index,
+                  items: items,
+                  onSelect: (value) {
+                    setState(() => index = value);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            )
+          : null,
+      body: mobile
+          ? _screenBody(items[index].$3)
+          : Row(
+              children: [
+                SizedBox(
+                  width: extendedSidebar ? 236 : 88,
+                  child: _SideMenu(
+                    selected: index,
+                    items: items,
+                    extended: extendedSidebar,
+                    onSelect: (value) => setState(() => index = value),
+                  ),
+                ),
+                Container(width: 1, color: AppTheme.border),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOut,
+                    switchOutCurve: Curves.easeIn,
+                    child: KeyedSubtree(
+                      key: ValueKey(index),
+                      child: _screenBody(items[index].$3),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _screenBody(Widget child) => Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0.85, -0.9),
+            radius: 1.1,
+            colors: [Color(0xFF171014), AppTheme.background],
+            stops: [0, 0.58],
+          ),
+        ),
+        child: child,
+      );
+}
+
+class _SideMenu extends StatelessWidget {
+  const _SideMenu({
+    required this.selected,
+    required this.items,
+    required this.onSelect,
+    this.extended = true,
+  });
+
+  final int selected;
+  final List<(String, IconData, Widget)> items;
+  final ValueChanged<int> onSelect;
+  final bool extended;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppTheme.sidebar,
+      padding: EdgeInsets.symmetric(horizontal: extended ? 14 : 10),
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              extended ? 10 : 0,
+              22,
+              extended ? 10 : 0,
+              22,
+            ),
+            child: _BrandMark(compact: !extended),
+          ),
+          if (extended)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  _LiveBadge(),
+                  Spacer(),
+                  Icon(Icons.notifications_none_rounded,
+                      size: 18, color: AppTheme.muted),
+                ],
+              ),
+            ),
+          SizedBox(height: extended ? 18 : 8),
+          Expanded(
+            child: ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 5),
+              itemBuilder: (context, i) {
+                final active = i == selected;
+                return Tooltip(
+                  message: extended ? '' : items[i].$1,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => onSelect(i),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 170),
+                      height: 48,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: extended ? 13 : 0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? const Color(0xFF251013)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: active
+                              ? const Color(0xFF4B171C)
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: extended
+                            ? MainAxisAlignment.start
+                            : MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? const Color(0xFF3B1116)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              items[i].$2,
+                              size: 19,
+                              color: active ? AppTheme.red : AppTheme.muted,
+                            ),
+                          ),
+                          if (extended) ...[
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Text(
+                                items[i].$1,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: active
+                                      ? Colors.white
+                                      : const Color(0xFFC1C6CF),
+                                  fontWeight: active
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18, top: 10),
+            child: extended
+                ? Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF101319),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: const Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 17,
+                          backgroundColor: Color(0xFF241015),
+                          child: Icon(Icons.storefront_rounded,
+                              color: AppTheme.red, size: 18),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Main Store',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12.5)),
+                              Text(AppScope.of(context).data?.business.activeRole == 'Worker' ? 'Worker mode' : 'Owner mode',
+                                  style: TextStyle(
+                                      color: AppTheme.muted, fontSize: 10.5)),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.unfold_more_rounded,
+                            size: 16, color: AppTheme.muted),
+                      ],
+                    ),
+                  )
+                : const CircleAvatar(
+                    radius: 19,
+                    backgroundColor: Color(0xFF241015),
+                    child: Icon(Icons.storefront_rounded,
+                        color: AppTheme.red, size: 18),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({this.compact = false});
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment:
+          compact ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppTheme.red,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [
+              BoxShadow(color: Color(0x55E50914), blurRadius: 18),
+            ],
+          ),
+          child: const Icon(Icons.trending_up_rounded,
+              color: Colors.white, size: 23),
+        ),
+        if (!compact) ...[
+          const SizedBox(width: 11),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'PROFIT GPS',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              Text(
+                'BUSINESS OS',
+                style: TextStyle(
+                  color: AppTheme.muted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 9.5,
+                  letterSpacing: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF101B17),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFF1F3C31)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.circle, color: AppTheme.green, size: 7),
+            SizedBox(width: 5),
+            Text(
+              'LIVE',
+              style: TextStyle(
+                color: AppTheme.green,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      );
+}

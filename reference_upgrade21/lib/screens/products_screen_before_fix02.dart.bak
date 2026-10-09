@@ -1,0 +1,134 @@
+import 'package:barcode_widget/barcode_widget.dart';
+import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
+import '../core/app_scope.dart';
+import '../core/theme.dart';
+import '../models/entities.dart';
+import '../widgets/common.dart';
+
+class ProductsScreen extends StatefulWidget {
+  const ProductsScreen({super.key});
+  @override
+  State<ProductsScreen> createState() => _ProductsScreenState();
+}
+
+class _ProductsScreenState extends State<ProductsScreen> {
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final data = AppScope.of(context).data!;
+    final products = data.products.where((p) {
+      final q = query.toLowerCase();
+      return q.isEmpty || p.name.toLowerCase().contains(q) || p.barcode.toLowerCase().contains(q) || p.productCode.toLowerCase().contains(q) || p.category.toLowerCase().contains(q);
+    }).toList();
+    return ListView(
+      padding: const EdgeInsets.all(22),
+      children: [
+        SectionTitle(
+          'Products & Inventory',
+          subtitle: 'Barcode and non-barcode products, units, GST, default discount, margin, stock and expiry.',
+          trailing: FilledButton.icon(onPressed: () => _addProduct(context), icon: const Icon(Icons.add), label: const Text('Add product')),
+        ),
+        TextField(onChanged: (v) => setState(() => query = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search name / product code / barcode / category')),
+        const SizedBox(height: 14),
+        ...products.map((p) => _ProductCard(product: p)),
+      ],
+    );
+  }
+
+  Future<void> _addProduct(BuildContext context) async {
+    final app = AppScope.of(context);
+    final name = TextEditingController(); final productCode = TextEditingController(); final barcode = TextEditingController();
+    final brand = TextEditingController(); final manufacturer = TextEditingController(); final packageSize = TextEditingController(); final imageUrl = TextEditingController();
+    final purchaseQty = TextEditingController(text:'1'); final packConversion = TextEditingController(text:'1'); final purchaseInvoice = TextEditingController();
+    final supplierDiscount = TextEditingController(text:'0'); final freight = TextEditingController(text:'0'); final sell = TextEditingController(); final stock = TextEditingController(); final reorder = TextEditingController(text:'5');
+    final hsn = TextEditingController(); final defaultDiscountPercent = TextEditingController(text:'0'); final defaultDiscountAmount = TextEditingController(text:'0');
+    final customCategory = TextEditingController(); final customUnit = TextEditingController();
+    String category='General'; String unit='pcs'; String purchaseUnit='unit'; String supplierId=''; bool weighted=false; bool gstApplicable=false; bool taxInclusive=true; bool purchaseIncludesTax=false; bool itcEligible=false; double gstRate=0;
+    const categories=['General','Grocery','Dairy','Fruits','Vegetables','Staples','Beverages','Snacks','Bakery','Household','Personal Care','Clothing','Electronics','Meat & Fish','Services','Other'];
+    const units=['pcs','kg','g','mg','L','mL','dozen','pack','box','carton','bottle','packet','bag','tray','bundle','metre','cm','sq ft','hour','service','Other'];
+    const purchaseUnits=['unit','piece','pack','box','carton','kg','g','L','mL','bag','tray','bundle','Other'];
+    const gstRates=[0.0,0.25,3.0,5.0,12.0,18.0,28.0];
+
+    await showDialog<void>(context:context,builder:(dialogContext)=>StatefulBuilder(builder:(context,update){
+      double d(TextEditingController c)=>double.tryParse(c.text)??0;
+      final qty=d(purchaseQty)<=0?1:d(purchaseQty); final conv=d(packConversion)<=0?1:d(packConversion); final totalSellingUnits=qty*conv;
+      final invoice=d(purchaseInvoice); final supplierDiscValue=invoice*d(supplierDiscount)/100; final afterDisc=(invoice-supplierDiscValue).clamp(0.0,double.infinity).toDouble();
+      double inputGst=0; double costBeforeFreight=afterDisc;
+      if(gstApplicable&&gstRate>0){ if(purchaseIncludesTax){ final taxable=afterDisc/(1+gstRate/100); inputGst=afterDisc-taxable; costBeforeFreight=itcEligible?taxable:afterDisc; } else { inputGst=afterDisc*gstRate/100; costBeforeFreight=itcEligible?afterDisc:afterDisc+inputGst; } }
+      final landed=costBeforeFreight+d(freight); final effectiveCost=totalSellingUnits<=0?0:landed/totalSellingUnits;
+      final price=d(sell); final net=(price-price*d(defaultDiscountPercent)/100-d(defaultDiscountAmount)).clamp(0.0,double.infinity).toDouble(); final profit=net-effectiveCost; final margin=net<=0?0.0:profit/net*100;
+      final finalUnit=unit=='Other'?(customUnit.text.trim().isEmpty?'unit':customUnit.text.trim()):unit;
+      final finalCategory=category=='Other'?(customCategory.text.trim().isEmpty?'Other':customCategory.text.trim()):category;
+      final supplierMatches=app.data!.suppliers.where((e)=>e.id==supplierId).toList(); final supplier=supplierMatches.isEmpty?null:supplierMatches.first;
+      void fillFromExisting(Product p){ name.text=p.name; productCode.text=p.productCode; brand.text=p.brand; manufacturer.text=p.manufacturer; packageSize.text=p.packageSize; imageUrl.text=p.imageUrl; category=p.category; unit=p.unit; weighted=p.weighted; sell.text=p.sellingPrice.toString(); hsn.text=p.hsnSac; gstApplicable=p.gstApplicable; gstRate=p.gstRate; taxInclusive=p.taxInclusive; update((){}); }
+      Future<bool> saveCurrent() async {
+        if(name.text.trim().isEmpty) return false;
+        final u=unit=='Other'?(customUnit.text.trim().isEmpty?'unit':customUnit.text.trim()):unit;
+        final supMatches=app.data!.suppliers.where((e)=>e.id==supplierId).toList(); final sup=supMatches.isEmpty?null:supMatches.first;
+        await app.addProduct(Product(id:const Uuid().v4(),name:name.text.trim(),barcode:barcode.text.trim(),productCode:productCode.text.trim(),category:finalCategory,purchasePrice:effectiveCost,sellingPrice:d(sell),gstRate:gstApplicable?gstRate:0,gstApplicable:gstApplicable,taxInclusive:taxInclusive,hsnSac:hsn.text.trim(),defaultDiscountPercent:d(defaultDiscountPercent),defaultDiscountAmount:d(defaultDiscountAmount),stock:d(stock),reorderLevel:d(reorder),unit:u,weighted:weighted,brand:brand.text.trim(),manufacturer:manufacturer.text.trim(),supplierId:supplierId,supplier:sup?.name??'',packageSize:packageSize.text.trim(),purchaseUnit:purchaseUnit,purchaseQuantity:qty,purchaseInvoicePrice:invoice,purchasePriceIncludesTax:purchaseIncludesTax,packConversionQty:conv,supplierDiscountPercent:d(supplierDiscount),freightCost:d(freight),itcEligible:itcEligible,imageUrl:imageUrl.text.trim()));
+        return true;
+      }
+      return AlertDialog(
+        title:Row(children:[const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Add inventory product'),Text('Scan, fetch, verify and save product details.',style:TextStyle(color:AppTheme.muted,fontSize:11,fontWeight:FontWeight.w400))])),FilledButton.icon(onPressed:()async{final ctl=TextEditingController(text:barcode.text);final v=await showDialog<String>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Scan & Fetch Product'),content:TextField(controller:ctl,autofocus:true,decoration:const InputDecoration(labelText:'Barcode / GTIN',prefixIcon:Icon(Icons.qr_code_scanner))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,ctl.text.trim()),child:const Text('Fetch'))]));if(v==null||v.isEmpty)return;barcode.text=v;final matches=app.data!.products.where((p)=>p.barcode==v).toList();if(matches.isNotEmpty){fillFromExisting(matches.first);}else{update((){});if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Barcode saved. No local match found; verify/fill the remaining fields. External catalogue connector can be added later.')));}},icon:const Icon(Icons.qr_code_scanner),label:const Text('Scan & Fetch'))]),
+        content:SizedBox(width:960,height:720,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          _section('Basic details','Product identity and classification',Wrap(spacing:10,runSpacing:10,children:[
+            SizedBox(width:220,height:150,child:Container(decoration:BoxDecoration(color:const Color(0xFF111720),borderRadius:BorderRadius.circular(16),border:Border.all(color:AppTheme.border)),child:imageUrl.text.trim().isEmpty?const Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(Icons.image_outlined,size:42,color:AppTheme.muted),SizedBox(height:7),Text('Product image',style:TextStyle(color:AppTheme.muted))]):ClipRRect(borderRadius:BorderRadius.circular(15),child:Image.network(imageUrl.text.trim(),fit:BoxFit.cover,errorBuilder:(_,__,___)=>const Center(child:Icon(Icons.broken_image_outlined)))))),
+            SizedBox(width:330,child:TextField(controller:name,onChanged:(_)=>update((){}),decoration:const InputDecoration(labelText:'Product name *'))),SizedBox(width:330,child:TextField(controller:productCode,decoration:const InputDecoration(labelText:'Internal product code / SKU'))),
+            SizedBox(width:330,child:TextField(controller:barcode,onChanged:(_)=>update((){}),decoration:const InputDecoration(labelText:'Barcode / GTIN / QR value'))),SizedBox(width:260,child:TextField(controller:brand,decoration:const InputDecoration(labelText:'Brand'))),SizedBox(width:260,child:TextField(controller:manufacturer,decoration:const InputDecoration(labelText:'Manufacturer'))),
+            SizedBox(width:260,child:TextField(controller:packageSize,decoration:const InputDecoration(labelText:'Package size'))),SizedBox(width:330,child:TextField(controller:imageUrl,onChanged:(_)=>update((){}),decoration:const InputDecoration(labelText:'Product image URL (optional)'))),
+            SizedBox(width:260,child:DropdownButtonFormField<String>(value:category,items:categories.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>update(()=>category=v??'General'),decoration:const InputDecoration(labelText:'Category'))),if(category=='Other')SizedBox(width:260,child:TextField(controller:customCategory,onChanged:(_)=>update((){}),decoration:const InputDecoration(labelText:'Custom category'))),
+            SizedBox(width:260,child:DropdownButtonFormField<String>(value:unit,items:units.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>update((){unit=v??'pcs';weighted=!['pcs','pack','box','carton','bottle','packet','bag','tray','bundle','dozen'].contains(unit);}),decoration:const InputDecoration(labelText:'Billing unit'))),if(unit=='Other')SizedBox(width:260,child:TextField(controller:customUnit,onChanged:(_)=>update((){}),decoration:const InputDecoration(labelText:'Custom billing unit'))),
+          ])),
+          const SizedBox(height:10),
+          _section('Supplier & purchase','Choose from Supplier Master by code or name.',Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Autocomplete<Supplier>(displayStringForOption:(o)=>'${o.code} • ${o.name}',optionsBuilder:(value){final q=value.text.toLowerCase().trim();return app.data!.suppliers.where((x)=>q.isEmpty||x.code.toLowerCase().contains(q)||x.name.toLowerCase().contains(q)).take(3);},onSelected:(v)=>update(()=>supplierId=v.id),fieldViewBuilder:(context,ctl,focus,onSubmit)=>TextField(controller:ctl,focusNode:focus,decoration:InputDecoration(labelText:'Supplier code / name',hintText:supplier==null?'Type SUP001 or supplier name':'${supplier.code} • ${supplier.name}',prefixIcon:const Icon(Icons.local_shipping_outlined)))),
+            const SizedBox(height:10),Wrap(spacing:10,runSpacing:10,children:[SizedBox(width:200,child:TextField(controller:purchaseQty,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Purchase quantity'))),SizedBox(width:200,child:DropdownButtonFormField<String>(value:purchaseUnit,items:purchaseUnits.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>update(()=>purchaseUnit=v??'unit'),decoration:const InputDecoration(labelText:'Purchase as'))),SizedBox(width:220,child:TextField(controller:packConversion,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'1 $purchaseUnit = how many $finalUnit'))),SizedBox(width:220,child:TextField(controller:purchaseInvoice,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Supplier invoice price ₹'))),SizedBox(width:200,child:TextField(controller:supplierDiscount,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Supplier discount %'))),SizedBox(width:200,child:TextField(controller:freight,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Freight / landed cost ₹'))),SizedBox(width:200,child:TextField(controller:stock,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'Opening stock ($finalUnit)'))),SizedBox(width:200,child:TextField(controller:reorder,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Reorder level')))]),
+            SwitchListTile(contentPadding:EdgeInsets.zero,value:weighted,title:const Text('Decimal / weight billing'),subtitle:Text('Enable quantities like 1.25 $finalUnit.'),onChanged:(v)=>update(()=>weighted=v)),
+          ])),
+          const SizedBox(height:10),
+          _section('Pricing & discounts','Selling price and default billing discount.',Wrap(spacing:10,runSpacing:10,children:[SizedBox(width:220,child:TextField(controller:sell,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'Selling price / $finalUnit'))),SizedBox(width:220,child:TextField(controller:defaultDiscountPercent,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Default billing discount %'))),SizedBox(width:220,child:TextField(controller:defaultDiscountAmount,onChanged:(_)=>update((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Default billing discount ₹'))),_preview('Effective cost / $finalUnit',money(effectiveCost)),_preview('Expected profit',money(profit),color:profit<0?AppTheme.red:AppTheme.green),_preview('Margin','${margin.toStringAsFixed(1)}%',color:margin<8?AppTheme.red:margin<15?AppTheme.amber:AppTheme.green)])),
+          const SizedBox(height:10),
+          _section('GST & compliance','Tax settings must be verified against current official rules before production use.',Column(children:[SwitchListTile(contentPadding:EdgeInsets.zero,value:gstApplicable,title:const Text('GST applicable'),onChanged:(v)=>update((){gstApplicable=v;if(!v)gstRate=0;})),if(gstApplicable)...[Wrap(spacing:10,runSpacing:10,children:[SizedBox(width:200,child:DropdownButtonFormField<double>(value:gstRate,items:gstRates.map((e)=>DropdownMenuItem(value:e,child:Text('${e.toStringAsFixed(e%1==0?0:2)}%'))).toList(),onChanged:(v)=>update(()=>gstRate=v??0),decoration:const InputDecoration(labelText:'GST rate'))),SizedBox(width:220,child:TextField(controller:hsn,decoration:const InputDecoration(labelText:'HSN / SAC'))),SizedBox(width:230,child:DropdownButtonFormField<bool>(value:purchaseIncludesTax,items:const [DropdownMenuItem(value:false,child:Text('Purchase price before GST')),DropdownMenuItem(value:true,child:Text('Purchase price includes GST'))],onChanged:(v)=>update(()=>purchaseIncludesTax=v??false),decoration:const InputDecoration(labelText:'Purchase tax mode'))),SizedBox(width:230,child:DropdownButtonFormField<bool>(value:taxInclusive,items:const [DropdownMenuItem(value:true,child:Text('Selling price includes GST')),DropdownMenuItem(value:false,child:Text('Selling price before GST'))],onChanged:(v)=>update(()=>taxInclusive=v??true),decoration:const InputDecoration(labelText:'Selling tax mode')))]),SwitchListTile(contentPadding:EdgeInsets.zero,value:itcEligible,title:const Text('Input GST credit (ITC) eligible'),subtitle:Text('Input GST calculated: ${money(inputGst)}'),onChanged:(v)=>update(()=>itcEligible=v))]])),
+        ]))),
+        actions:[TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),OutlinedButton.icon(onPressed:()async{if(!await saveCurrent())return;name.clear();productCode.clear();barcode.clear();brand.clear();manufacturer.clear();packageSize.clear();imageUrl.clear();purchaseInvoice.clear();sell.clear();stock.clear();supplierId='';update((){});},icon:const Icon(Icons.add),label:const Text('Save & add another')),FilledButton.icon(onPressed:()async{if(!await saveCurrent())return;if(dialogContext.mounted)Navigator.pop(dialogContext);},icon:const Icon(Icons.save_outlined),label:const Text('Save product'))]
+      );
+    }));
+  }
+
+  Widget _section(String title,String subtitle,Widget child)=>Container(width:double.infinity,padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFF0F141B),borderRadius:BorderRadius.circular(16),border:Border.all(color:AppTheme.border)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w900)),Text(subtitle,style:const TextStyle(color:AppTheme.muted,fontSize:11)),const SizedBox(height:11),child]));
+
+  static Widget _preview(String label, String value, {Color? color}) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: AppTheme.muted, fontSize: 11)), Text(value, style: TextStyle(fontWeight: FontWeight.w900, color: color))]);
+}
+
+class _ProductCard extends StatelessWidget {
+  const _ProductCard({required this.product});
+  final Product product;
+  @override
+  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(14), child: LayoutBuilder(builder: (context, c) {
+    final narrow = c.maxWidth < 820;
+    final identity = Row(children: [
+      Container(width: narrow ? 56 : 112, height: 44, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFF171A20), borderRadius: BorderRadius.circular(10)), child: product.barcode.isEmpty ? Icon(product.weighted ? Icons.scale_rounded : Icons.qr_code_2, color: product.weighted ? AppTheme.green : AppTheme.muted) : BarcodeWidget(barcode: Barcode.code128(), data: product.barcode, drawText: false, color: Colors.white)),
+      const SizedBox(width: 12),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        Text('${product.productCode.isEmpty ? 'No SKU' : product.productCode} • ${product.category} • ${product.unit}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppTheme.muted)),
+      ])),
+    ]);
+    final metrics = Wrap(alignment: WrapAlignment.end, spacing: 14, runSpacing: 8, children: [
+      _Info(label: 'Price', value: '${money(product.sellingPrice)}/${product.unit}'),
+      _Info(label: 'Default disc.', value: product.defaultDiscountPercent > 0 ? '${product.defaultDiscountPercent.toStringAsFixed(1)}%' : money(product.defaultDiscountAmount)),
+      _Info(label: 'Net profit', value: money(product.defaultProfit), color: product.defaultProfit < 0 ? AppTheme.red : AppTheme.green),
+      _Info(label: 'GST', value: product.gstApplicable ? '${product.gstRate.toStringAsFixed(product.gstRate % 1 == 0 ? 0 : 2)}%' : 'Not applicable'),
+      _Info(label: 'Stock', value: product.stockLabel),
+    ]);
+    return narrow ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [identity, const SizedBox(height: 12), metrics]) : Row(children: [Expanded(child: identity), const SizedBox(width: 16), Flexible(flex: 2, child: metrics)]);
+  })));
+}
+
+class _Info extends StatelessWidget {
+  const _Info({required this.label, required this.value, this.color});
+  final String label; final String value; final Color? color;
+  @override Widget build(BuildContext context) => SizedBox(width: 125, child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(label, style: const TextStyle(color: AppTheme.muted, fontSize: 11)), Text(value, maxLines: 2, textAlign: TextAlign.end, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w800, color: color))]));
+}
