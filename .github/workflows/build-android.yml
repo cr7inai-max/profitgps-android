@@ -92,6 +92,9 @@ jobs:
               p.write_text(s)
           PY
 
+      - name: Integrate latest inventory review and preserve full Windows billing
+        run: python3 mobile_overlay/apply_integrated_import.py
+
       - name: Apply Android scanner and source corrections
         shell: bash
         run: |
@@ -183,15 +186,15 @@ jobs:
         run: flutter analyze lib --no-fatal-warnings
 
       - name: Build release APK
-        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.11.${{ github.run_number }}
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=0.12.${{ github.run_number }}
 
       - name: Rename APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Mobile_v0.11_InstallFix.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ProfitGPS_Android_Integrated_v0.12.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ProfitGPS-Android-Mobile-v0.11-InstallFix
-          path: ProfitGPS_Android_Mobile_v0.11_InstallFix.apk
+          name: ProfitGPS-Android-Integrated-v0.12
+          path: ProfitGPS_Android_Integrated_v0.12.apk
           if-no-files-found: error
           retention-days: 30
