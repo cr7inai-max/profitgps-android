@@ -65,7 +65,7 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
   static double? number(Object? v) => double.tryParse((v ?? '').toString().trim());
   static String str(Map<String,dynamic> d, String key) => (d[key] ?? '').toString().trim();
   static String cell(CellValue? c) {
-    if (c is TextCellValue) return c.value;
+    if (c is TextCellValue) return (c.value.text ?? '') + (c.value.children ?? const []).map((span) => span.text ?? '').join();
     if (c is IntCellValue) return c.value.toString();
     if (c is DoubleCellValue) return c.value.toString();
     if (c is BoolCellValue) return c.value.toString();
@@ -163,9 +163,10 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
     if ((number(d['sellingPrice']) ?? 0) <= 0) errors.add('Selling price');
     if (str(d,'stock').isEmpty || (number(d['stock']) ?? -1) < 0) errors.add('Stock (0 accepted)');
     final tax = str(d,'taxCategory');
-    if (!['Taxable','Nil rated','Exempt','Non-GST'].contains(tax)) errors.add('GST category');
+    if (!['Taxable','Nil-rated','Exempt','Non-GST'].contains(tax)) errors.add('GST category');
     if (tax == 'Taxable' && (number(d['gstRate']) ?? 0) <= 0) errors.add('GST rate');
     if (tax == 'Taxable' && str(d,'hsnSac').isEmpty) errors.add('HSN / SAC');
+    if (tax == 'Taxable' && !['yes','no','true','false','1','0','inclusive','exclusive'].contains(str(d,'taxInclusive').toLowerCase())) errors.add('GST inclusive or exclusive');
     if (tax != 'Taxable' && str(d,'gstRate').isNotEmpty && number(d['gstRate']) != 0) errors.add('GST rate must be zero');
     final source = str(d,'sourceType');
     if (!['Supplier','Local/Farmer','Own'].contains(source)) errors.add('Source type');
@@ -173,6 +174,8 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
     if (str(d,'packType').isNotEmpty && str(d,'netContent').isEmpty) errors.add('Net content');
     if (str(d,'packType').isNotEmpty && (number(d['conversionQty']) ?? 0) <= 0) errors.add('Unit conversion');
     if (str(d,'expiryDate').isEmpty && !['No expiry','Only MFG date'].contains(str(d,'expiryPolicy'))) errors.add('Expiry option');
+    if (str(d,'expiryDate').isNotEmpty && DateTime.tryParse(str(d,'expiryDate')) == null) errors.add('Expiry date format (YYYY-MM-DD)');
+    if (str(d,'expiryPolicy') == 'Only MFG date' && str(d,'mfgDate').isEmpty) errors.add('Manufacturing date');
     if (str(d,'productCode').isNotEmpty && products.any((p) => p.productCode == str(d,'productCode'))) errors.add('SKU already exists; edit existing product');
     if (str(d,'barcode').isNotEmpty && products.any((p) => p.barcode == str(d,'barcode'))) errors.add('Barcode already exists; edit existing product');
     return errors;
@@ -195,7 +198,7 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
       content:SizedBox(width:550,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
         for(final entry in fields.entries)
           if(entry.key=='sourceType') chooser(entry.value,c[entry.key]!,const ['Supplier','Local/Farmer','Own'])
-          else if(entry.key=='taxCategory') chooser(entry.value,c[entry.key]!,const ['Taxable','Nil rated','Exempt','Non-GST'])
+          else if(entry.key=='taxCategory') chooser(entry.value,c[entry.key]!,const ['Taxable','Nil-rated','Exempt','Non-GST'])
           else if(entry.key=='expiryPolicy') chooser(entry.value,c[entry.key]!,const ['No expiry','Only MFG date','Expiry date provided'])
           else if(entry.key=='supplierId') chooser('Supplier master',c[entry.key]!,
             [for(final s in app.data!.suppliers.where((s)=>s.active)) s.id],
@@ -312,7 +315,7 @@ class _InventoryImportScreenState extends State<InventoryImportScreen> {
         bulkSelect('Source type',bulkSource,const ['Supplier','Local/Farmer','Own'],(v)=>setState(()=>bulkSource=v)),
         bulkSelect('Supplier master',bulkSupplier,[for(final s in data.suppliers.where((s)=>s.active))s.id],
           (v)=>setState(()=>bulkSupplier=v),titles:{for(final s in data.suppliers.where((s)=>s.active))s.id:s.name}),
-        bulkSelect('GST category',bulkCategory,const ['Taxable','Nil rated','Exempt','Non-GST'],(v)=>setState(()=>bulkCategory=v)),
+        bulkSelect('GST category',bulkCategory,const ['Taxable','Nil-rated','Exempt','Non-GST'],(v)=>setState(()=>bulkCategory=v)),
         TextField(decoration:const InputDecoration(labelText:'GST % for selected rows (optional)'),onChanged:(v)=>bulkGst=v,
           keyboardType:const TextInputType.numberWithOptions(decimal:true)),
         bulkSelect('Expiry option',bulkExpiry,const ['No expiry','Only MFG date','Expiry date provided'],
