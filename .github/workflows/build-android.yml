@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -59,6 +59,21 @@ jobs:
           unzip -o ProfitGPS_Android_Upgrade21_Native_Source.zip
           mkdir -p assets/product_images
           touch assets/product_images/.keep
+
+      - name: Preserve Upgrade 21 Flutter reference for full parity review
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reference_upgrade21
+          cp -R lib reference_upgrade21/
+          cp pubspec.yaml reference_upgrade21/pubspec.yaml
+          git config user.name "profitgps-build"
+          git config user.email "profitgps-build@users.noreply.github.com"
+          git add -f reference_upgrade21/lib reference_upgrade21/pubspec.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m "Preserve Upgrade 21 Flutter source for Android feature parity"
+            git push origin HEAD:main
+          fi
 
       - name: Apply mobile baseline
         run: python3 mobile_overlay/apply_mobile_baseline.py
